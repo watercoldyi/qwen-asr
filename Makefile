@@ -6,10 +6,22 @@ CFLAGS_BASE = -Wall -Wextra -O3 -march=native -ffast-math
 LDFLAGS = -lm -lpthread
 
 # Platform detection
-UNAME_S := $(shell uname -s)
+UNAME_S := $(shell uname -s 2>/dev/null || echo Windows)
+
+# Windows detection (MSYS2/MinGW-w64: uname returns MINGW64_NT-* or MSYS_NT-*)
+ifneq (,$(findstring MINGW,$(UNAME_S)))
+MINGW = 1
+endif
+ifneq (,$(findstring MSYS,$(UNAME_S)))
+MINGW = 1
+endif
 
 # Source files
+ifeq ($(MINGW),1)
+SRCS = qwen_asr.c qwen_asr_kernels.c qwen_asr_kernels_generic.c qwen_asr_kernels_avx.c qwen_asr_audio.c qwen_asr_encoder.c qwen_asr_decoder.c qwen_asr_tokenizer.c qwen_asr_safetensors.c
+else
 SRCS = qwen_asr.c qwen_asr_kernels.c qwen_asr_kernels_generic.c qwen_asr_kernels_neon.c qwen_asr_kernels_avx.c qwen_asr_audio.c qwen_asr_encoder.c qwen_asr_decoder.c qwen_asr_tokenizer.c qwen_asr_safetensors.c
+endif
 OBJS = $(SRCS:.c=.o)
 MAIN = main.c
 TARGET = qwen_asr
@@ -17,7 +29,7 @@ TARGET = qwen_asr
 # Debug build flags
 DEBUG_CFLAGS = -Wall -Wextra -g -O0 -DDEBUG -fsanitize=address
 
-.PHONY: all clean debug info help blas test test-stream-cache
+.PHONY: all clean debug info help blas win32 test test-stream-cache
 
 # Default: show available targets
 all: help
@@ -27,6 +39,9 @@ help:
 	@echo ""
 	@echo "Choose a backend:"
 	@echo "  make blas     - With BLAS acceleration (Accelerate/OpenBLAS)"
+ifeq ($(MINGW),1)
+	@echo "  make win32    - Windows (MinGW-w64) default build"
+endif
 	@echo ""
 	@echo "Other targets:"
 	@echo "  make debug    - Debug build with AddressSanitizer"
@@ -43,6 +58,9 @@ help:
 ifeq ($(UNAME_S),Darwin)
 blas: CFLAGS = $(CFLAGS_BASE) -DUSE_BLAS -DACCELERATE_NEW_LAPACK
 blas: LDFLAGS += -framework Accelerate
+else ifeq ($(MINGW),1)
+blas: CFLAGS = $(CFLAGS_BASE) -DUSE_BLAS -DUSE_OPENBLAS
+blas: LDFLAGS += -lopenblas -lmman
 else
 blas: CFLAGS = $(CFLAGS_BASE) -DUSE_BLAS -DUSE_OPENBLAS -I/usr/include/openblas
 blas: LDFLAGS += -lopenblas
@@ -54,6 +72,19 @@ blas:
 	@echo "Built with BLAS backend"
 
 # =============================================================================
+# Backend: win32 (MinGW-w64 on Windows)
+# =============================================================================
+ifeq ($(MINGW),1)
+win32: CFLAGS = $(CFLAGS_BASE)
+win32: LDFLAGS += -lmman
+win32:
+	@$(MAKE) clean
+	@$(MAKE) $(TARGET) CFLAGS="$(CFLAGS)" LDFLAGS="$(LDFLAGS)"
+	@echo ""
+	@echo "Built for Windows (MinGW-w64)"
+endif
+
+# =============================================================================
 # Build rules
 # =============================================================================
 $(TARGET): $(OBJS) main.o
@@ -63,17 +94,19 @@ $(TARGET): $(OBJS) main.o
 	$(CC) $(CFLAGS) -c -o $@ $<
 
 # Debug build
+ifneq ($(MINGW),1)
 debug: CFLAGS = $(DEBUG_CFLAGS)
 debug: LDFLAGS += -fsanitize=address
 debug:
 	@$(MAKE) clean
 	@$(MAKE) $(TARGET) CFLAGS="$(CFLAGS)" LDFLAGS="$(LDFLAGS)"
+endif
 
 # =============================================================================
 # Utilities
 # =============================================================================
 clean:
-	rm -f $(OBJS) main.o $(TARGET)
+	rm -f $(OBJS) main.o $(TARGET) $(TARGET).exe
 
 info:
 	@echo "Platform: $(UNAME_S)"
@@ -81,6 +114,8 @@ info:
 	@echo ""
 ifeq ($(UNAME_S),Darwin)
 	@echo "Backend: blas (Apple Accelerate)"
+else ifeq ($(MINGW),1)
+	@echo "Backend: Windows (MinGW-w64 + mman-win32)"
 else
 	@echo "Backend: blas (OpenBLAS)"
 endif

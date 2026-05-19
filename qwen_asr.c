@@ -16,7 +16,11 @@
 #include <ctype.h>
 #include <math.h>
 #include <limits.h>
+#ifdef _WIN32
+#include <windows.h>
+#else
 #include <sys/time.h>
+#endif
 
 /* Global verbose flag */
 int qwen_verbose = 0;
@@ -360,9 +364,21 @@ static void tok_embed_bf16_to_f32(float *dst, const uint16_t *tok_emb_bf16,
 }
 
 static double get_time_ms(void) {
+#ifdef _WIN32
+    static LARGE_INTEGER freq = {0};
+    static int freq_init = 0;
+    if (!freq_init) {
+        QueryPerformanceFrequency(&freq);
+        freq_init = 1;
+    }
+    LARGE_INTEGER counter;
+    QueryPerformanceCounter(&counter);
+    return (double)counter.QuadPart * 1000.0 / (double)freq.QuadPart;
+#else
     struct timeval tv;
     gettimeofday(&tv, NULL);
     return tv.tv_sec * 1000.0 + tv.tv_usec / 1000.0;
+#endif
 }
 
 static int cmp_float_asc(const void *a, const void *b) {

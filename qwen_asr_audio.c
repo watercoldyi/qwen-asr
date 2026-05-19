@@ -18,6 +18,10 @@
 #include <string.h>
 #include <math.h>
 #include <limits.h>
+#ifdef _WIN32
+#include <fcntl.h>
+#include <io.h>
+#endif
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -188,6 +192,9 @@ float *qwen_load_wav(const char *path, int *out_n_samples) {
 }
 
 float *qwen_read_pcm_stdin(int *out_n_samples) {
+#ifdef _WIN32
+    _setmode(_fileno(stdin), _O_BINARY);
+#endif
     size_t capacity = 1024 * 1024;
     size_t size = 0;
     uint8_t *buf = (uint8_t *)malloc(capacity);
@@ -484,6 +491,9 @@ static void *live_reader_thread(void *arg) {
 }
 
 qwen_live_audio_t *qwen_live_audio_start_stdin(void) {
+#ifdef _WIN32
+    _setmode(_fileno(stdin), _O_BINARY);
+#endif
     /* Read enough to detect WAV vs raw: we need at least 12 bytes for RIFF+WAVE,
      * but a full WAV header is typically 44 bytes. Read up to 4096 to cover
      * any extended header chunks before the data chunk. */

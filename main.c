@@ -11,6 +11,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifdef _WIN32
+#include <fcntl.h>
+#include <io.h>
+#endif
 
 /* Token streaming callback: print each piece as it's decoded */
 static void stream_token(const char *piece, void *userdata) {
@@ -73,6 +77,10 @@ static void usage(const char *prog) {
 }
 
 int main(int argc, char **argv) {
+#ifdef _WIN32
+    _setmode(_fileno(stdout), _O_BINARY);
+    _setmode(_fileno(stderr), _O_BINARY);
+#endif
     const char *model_dir = NULL;
     const char *input_wav = NULL;
     int verbosity = 1;

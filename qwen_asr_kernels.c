@@ -13,7 +13,9 @@
 #if (defined(__AVX512F__) || defined(__AVX2__)) && (defined(__x86_64__) || defined(__i386__) || defined(_M_X64) || defined(_M_IX86))
 #include <immintrin.h>
 #endif
-#ifdef __APPLE__
+#ifdef _WIN32
+#include <windows.h>
+#elif defined(__APPLE__)
 #include <sys/sysctl.h>
 #else
 #include <unistd.h>
@@ -118,7 +120,12 @@ void qwen_set_threads(int n) {
 }
 
 int qwen_get_num_cpus(void) {
-#ifdef __APPLE__
+#ifdef _WIN32
+    SYSTEM_INFO si;
+    GetSystemInfo(&si);
+    int n = (int)si.dwNumberOfProcessors;
+    return n > 0 ? n : 1;
+#elif defined(__APPLE__)
     int n = 0;
     size_t len = sizeof(n);
     sysctlbyname("hw.ncpu", &n, &len, NULL, 0);
